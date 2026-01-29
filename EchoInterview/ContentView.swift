@@ -1,24 +1,44 @@
-//
-//  ContentView.swift
-//  EchoInterview
-//
-//  Created by Luka Sarcevic on 29.01.2026..
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(Router.self) private var router
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationStack(path: Bindable(router).path) {
+            DashboardView(viewModel: DashboardViewModel(router: router))
+                .navigationDestination(for: Route.self) { route in
+                    destinationView(for: route)
+                }
         }
-        .padding()
+    }
+    
+    @ViewBuilder
+    private func destinationView(for route: Route) -> some View {
+        switch route {
+        case .dashboard:
+            DashboardView(viewModel: DashboardViewModel(router: router))
+        case .onboarding:
+            Text("Onboarding")
+        case .sessionSetup:
+            Text("Session Setup")
+        case .interviewRoom:
+            InterviewView(viewModel: InterviewViewModel(
+                router: router,
+                speechService: SpeechService(),
+                analysisService: AnalysisService()
+            ))
+        case .analytics:
+            Text("Analytics")
+        case .history:
+            Text("History")
+        case .settings:
+            Text("Settings")
+        }
     }
 }
 
 #Preview {
     ContentView()
+        .environment(Router())
+        .environment(AppState())
 }

@@ -42,6 +42,9 @@ You are an expert iOS Engineer.
   - Print debug logs in production; use `os.Logger` for structured logging.
   - Assume permissions (Microphone/Camera); always handle denial paths.
 
+# Code Style
+- **File Headers**: Do not include Xcode-generated file headers (// Created by...). Files should start directly with imports or code.
+
 # Output Discipline
 - If new files are required, list them at the beginning of the response.
 - Only generate code directly relevant to the current task.
