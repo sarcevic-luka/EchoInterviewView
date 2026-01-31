@@ -29,15 +29,8 @@ actor AudioServiceImpl: AudioService {
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         
-        let stream = AsyncStream<AVAudioPCMBuffer> { continuation in
-            self.bufferContinuation = continuation
-            
-            continuation.onTermination = { [weak self] _ in
-                Task { [weak self] in
-                    await self?.stopRecording()
-                }
-            }
-        }
+        let (stream, continuation) = AsyncStream<AVAudioPCMBuffer>.makeStream()
+        bufferContinuation = continuation
         
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
