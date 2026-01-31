@@ -9,31 +9,42 @@ struct AudioTestView: View {
     @State private var recordingTask: Task<Void, Never>?
     @State private var recordingStartTime: Date?
     @State private var metrics: NLPMetrics?
+    @State private var scores: AnswerScores?
     
     private let audioService: any AudioService
     private let speechService: any SpeechRecognitionService
     private let ttsService: any TextToSpeechService
     private let nlpService: NLPAnalysisService
+    private let scoringService: SimpleScoringService
+    
+    private var allPermissionsGranted: Bool {
+        permissionStatus == "Granted" && speechPermissionStatus == "Granted"
+    }
     
     init(
         audioService: any AudioService = AudioServiceImpl(),
         speechService: any SpeechRecognitionService = SpeechRecognitionServiceImpl(),
         ttsService: any TextToSpeechService = TextToSpeechServiceImpl(),
-        nlpService: NLPAnalysisService = NLPAnalysisService()
+        nlpService: NLPAnalysisService = NLPAnalysisService(),
+        scoringService: SimpleScoringService = SimpleScoringService()
     ) {
         self.audioService = audioService
         self.speechService = speechService
         self.ttsService = ttsService
         self.nlpService = nlpService
+        self.scoringService = scoringService
     }
     
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                permissionsSection
+                if !allPermissionsGranted {
+                    permissionsSection
+                }
                 recordingSection
                 transcriptSection
                 metricsSection
+                scoresSection
                 ttsSection
             }
             .padding()
@@ -151,6 +162,31 @@ struct AudioTestView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
     
+    // MARK: - Scores Section
+    
+    private var scoresSection: some View {
+        VStack(spacing: 16) {
+            Text("Answer Scores")
+                .font(.headline)
+            
+            if let scores {
+                VStack(spacing: 12) {
+                    ScoreRow(label: "Overall", score: scores.overall)
+                    ScoreRow(label: "Clarity", score: scores.clarity)
+                    ScoreRow(label: "Confidence", score: scores.confidence)
+                    ScoreRow(label: "Technical", score: scores.technical)
+                    ScoreRow(label: "Pace", score: scores.pace)
+                }
+            } else {
+                Text("Record audio to see scores...")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
     // MARK: - TTS Section
     
     private var ttsSection: some View {
@@ -205,6 +241,7 @@ struct AudioTestView: View {
         isRecording = true
         transcript = ""
         metrics = nil
+        scores = nil
         recordingStartTime = Date()
         
         recordingTask = Task {
@@ -253,7 +290,9 @@ struct AudioTestView: View {
                 }
                 
                 if !transcript.isEmpty {
-                    metrics = nlpService.analyze(transcript: transcript, duration: duration)
+                    let analyzedMetrics = nlpService.analyze(transcript: transcript, duration: duration)
+                    metrics = analyzedMetrics
+                    scores = scoringService.calculateScores(metrics: analyzedMetrics)
                 }
                 
                 isRecording = false
@@ -291,6 +330,39 @@ private struct MetricRow: View {
             Spacer()
             Text(value)
                 .fontWeight(.medium)
+        }
+    }
+}
+
+// MARK: - Score Row
+
+private struct ScoreRow: View {
+    let label: String
+    let score: Double
+    
+    private var scoreColor: Color {
+        if score >= 80 {
+            return .green
+        } else if score >= 60 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(String(format: "%.0f", score))
+                .fontWeight(.bold)
+                .foregroundStyle(scoreColor)
+            
+            ProgressView(value: score, total: 100)
+                .progressViewStyle(.linear)
+                .frame(width: 60)
+                .tint(scoreColor)
         }
     }
 }
