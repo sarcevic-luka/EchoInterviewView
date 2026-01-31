@@ -3,6 +3,7 @@ import SwiftUI
 struct InterviewRoomView: View {
     @Bindable var viewModel: InterviewSessionViewModel
     @Environment(Router.self) private var router
+    @State private var showErrorAlert = false
     
     var body: some View {
         VStack(spacing: 32) {
@@ -15,6 +16,16 @@ struct InterviewRoomView: View {
         .padding()
         .navigationTitle("Interview")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Error", isPresented: $showErrorAlert) {
+            Button("OK") {
+                viewModel.dismissError()
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "An unknown error occurred")
+        }
+        .onChange(of: viewModel.errorMessage) { _, error in
+            showErrorAlert = error != nil
+        }
     }
     
     // MARK: - Progress Section
@@ -89,6 +100,11 @@ struct InterviewRoomView: View {
             Label("Answer Recorded", systemImage: "checkmark.circle")
                 .font(.headline)
                 .foregroundStyle(.green)
+            
+        case .error:
+            Label("Error Occurred", systemImage: "exclamationmark.triangle")
+                .font(.headline)
+                .foregroundStyle(.red)
         }
     }
     
@@ -214,6 +230,18 @@ struct InterviewRoomView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
             }
+            
+        case .error:
+            Button {
+                viewModel.resetInterview()
+            } label: {
+                Label("Try Again", systemImage: "arrow.counterclockwise")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
         }
     }
     

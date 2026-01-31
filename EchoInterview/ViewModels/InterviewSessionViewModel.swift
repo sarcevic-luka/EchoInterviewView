@@ -6,6 +6,7 @@ enum SessionState: Equatable {
     case speaking(transcript: String)
     case analyzing
     case showingResults
+    case error(message: String)
 }
 
 @MainActor
@@ -20,6 +21,7 @@ final class InterviewSessionViewModel {
     private(set) var currentState: SessionState = .idle
     private(set) var currentQuestionIndex: Int = 0
     private(set) var answers: [Answer] = []
+    var errorMessage: String?
     
     private var recordingStartTime: Date?
     private var recordingTask: Task<Void, Never>?
@@ -72,6 +74,7 @@ final class InterviewSessionViewModel {
         currentState = .speaking(transcript: "")
         currentTranscript = ""
         recordingStartTime = Date()
+        errorMessage = nil
         
         recordingTask = Task {
             do {
@@ -84,7 +87,8 @@ final class InterviewSessionViewModel {
                     currentState = .speaking(transcript: partialTranscript)
                 }
             } catch {
-                currentState = .speaking(transcript: "Error: \(error.localizedDescription)")
+                errorMessage = "Recording failed: \(error.localizedDescription)"
+                currentState = .listening
             }
         }
     }
@@ -138,6 +142,11 @@ final class InterviewSessionViewModel {
         currentQuestionIndex = 0
         answers = []
         currentTranscript = ""
+        errorMessage = nil
+    }
+    
+    func dismissError() {
+        errorMessage = nil
     }
     
     // MARK: - Private Methods
