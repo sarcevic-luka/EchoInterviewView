@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InterviewRoomView: View {
     @Bindable var viewModel: InterviewSessionViewModel
+    @Environment(Router.self) private var router
     
     var body: some View {
         VStack(spacing: 32) {
@@ -184,7 +185,15 @@ struct InterviewRoomView: View {
         case .showingResults:
             if viewModel.isLastQuestion {
                 NavigationLink {
-                    InterviewResultsView(answers: viewModel.answers, questions: viewModel.questions)
+                    AnalyticsView(
+                        viewModel: AnalyticsViewModel(
+                            answers: viewModel.answers,
+                            questions: viewModel.questions
+                        ),
+                        onDone: {
+                            router.navigateToRoot()
+                        }
+                    )
                 } label: {
                     Label("View Results", systemImage: "chart.bar.fill")
                         .font(.headline)
@@ -217,117 +226,9 @@ struct InterviewRoomView: View {
     }
 }
 
-// MARK: - Results View (Placeholder)
-
-struct InterviewResultsView: View {
-    let answers: [Answer]
-    let questions: [Question]
-    
-    var averageScore: Double {
-        guard !answers.isEmpty else { return 0 }
-        return answers.reduce(0) { $0 + $1.scores.overall } / Double(answers.count)
-    }
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Overall Score
-                VStack(spacing: 8) {
-                    Text("Overall Score")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                    
-                    Text("\(Int(averageScore))")
-                        .font(.system(size: 64, weight: .bold))
-                        .foregroundStyle(scoreColor(for: averageScore))
-                    
-                    Text("out of 100")
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                
-                // Individual Answers
-                ForEach(Array(answers.enumerated()), id: \.offset) { index, answer in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Q\(index + 1): \(questions[index].text)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        
-                        Text(answer.transcript)
-                            .font(.body)
-                        
-                        HStack {
-                            ScoreLabel(title: "Overall", score: answer.scores.overall)
-                            ScoreLabel(title: "Clarity", score: answer.scores.clarity)
-                            ScoreLabel(title: "Pace", score: answer.scores.pace)
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-            }
-            .padding()
-        }
-        .navigationTitle("Results")
-    }
-    
-    private func scoreColor(for score: Double) -> Color {
-        if score >= 80 { return .green }
-        if score >= 60 { return .orange }
-        return .red
-    }
-}
-
-private struct ScoreLabel: View {
-    let title: String
-    let score: Double
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text("\(Int(score))")
-                .font(.caption)
-                .fontWeight(.bold)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
 #Preview("Idle State") {
     NavigationStack {
         InterviewRoomView(viewModel: InterviewSessionViewModel())
-    }
-}
-
-#Preview("Results") {
-    let mockAnswers = [
-        Answer(
-            transcript: "I recently worked on a mobile app that helped users track their fitness goals.",
-            duration: 15,
-            metrics: NLPMetrics(totalWordCount: 50, fillerWordCount: 2, speechRate: 150),
-            scores: AnswerScores(overall: 78, clarity: 85, confidence: 70, technical: 70, pace: 80)
-        ),
-        Answer(
-            transcript: "The biggest challenge was optimizing database queries for performance.",
-            duration: 12,
-            metrics: NLPMetrics(totalWordCount: 40, fillerWordCount: 1, speechRate: 140),
-            scores: AnswerScores(overall: 82, clarity: 90, confidence: 80, technical: 70, pace: 80)
-        )
-    ]
-    
-    let questions = [
-        Question(text: "Tell me about a recent project you're proud of."),
-        Question(text: "Describe a technical challenge you faced.")
-    ]
-    
-    NavigationStack {
-        InterviewResultsView(answers: mockAnswers, questions: questions)
+            .environment(Router())
     }
 }
