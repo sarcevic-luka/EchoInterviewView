@@ -33,6 +33,8 @@ struct ContentView: View {
             Text("History")
         case .settings:
             Text("Settings")
+        case .audioTest:
+            AudioTestView()
         }
     }
 }

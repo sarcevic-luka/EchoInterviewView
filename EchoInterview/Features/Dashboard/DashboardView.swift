@@ -4,7 +4,15 @@ struct DashboardView: View {
     @Bindable var viewModel: DashboardViewModel
     
     var body: some View {
-        Text("Dashboard")
+        VStack(spacing: 20) {
+            Text("Dashboard")
+                .font(.largeTitle)
+            
+            Button("Test Microphone Permission") {
+                viewModel.navigateToAudioTest()
+            }
+            .buttonStyle(.borderedProminent)
+        }
     }
 }
 

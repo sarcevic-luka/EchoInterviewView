@@ -8,6 +8,7 @@ enum Route: Hashable {
     case analytics
     case history
     case settings
+    case audioTest
 }
 
 @Observable

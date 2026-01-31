@@ -8,5 +8,9 @@ final class DashboardViewModel {
     init(router: Router) {
         self.router = router
     }
+    
+    func navigateToAudioTest() {
+        router.navigate(to: .audioTest)
+    }
 }
 
