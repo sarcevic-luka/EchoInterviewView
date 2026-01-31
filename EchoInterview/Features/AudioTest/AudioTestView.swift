@@ -7,19 +7,24 @@ struct AudioTestView: View {
     @State private var transcript: String = ""
     @State private var isSpeaking = false
     @State private var recordingTask: Task<Void, Never>?
+    @State private var recordingStartTime: Date?
+    @State private var metrics: NLPMetrics?
     
     private let audioService: any AudioService
     private let speechService: any SpeechRecognitionService
     private let ttsService: any TextToSpeechService
+    private let nlpService: NLPAnalysisService
     
     init(
         audioService: any AudioService = AudioServiceImpl(),
         speechService: any SpeechRecognitionService = SpeechRecognitionServiceImpl(),
-        ttsService: any TextToSpeechService = TextToSpeechServiceImpl()
+        ttsService: any TextToSpeechService = TextToSpeechServiceImpl(),
+        nlpService: NLPAnalysisService = NLPAnalysisService()
     ) {
         self.audioService = audioService
         self.speechService = speechService
         self.ttsService = ttsService
+        self.nlpService = nlpService
     }
     
     var body: some View {
@@ -28,6 +33,7 @@ struct AudioTestView: View {
                 permissionsSection
                 recordingSection
                 transcriptSection
+                metricsSection
                 ttsSection
             }
             .padding()
@@ -117,6 +123,34 @@ struct AudioTestView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
     
+    // MARK: - Metrics Section
+    
+    private var metricsSection: some View {
+        VStack(spacing: 16) {
+            Text("NLP Metrics")
+                .font(.headline)
+            
+            if let metrics {
+                VStack(spacing: 12) {
+                    MetricRow(label: "Total Words", value: "\(metrics.totalWordCount)")
+                    MetricRow(label: "Filler Words", value: "\(metrics.fillerWordCount)")
+                    MetricRow(label: "Speech Rate", value: String(format: "%.1f wpm", metrics.speechRate))
+                    
+                    if metrics.totalWordCount > 0 {
+                        let fillerPercentage = Double(metrics.fillerWordCount) / Double(metrics.totalWordCount) * 100
+                        MetricRow(label: "Filler %", value: String(format: "%.1f%%", fillerPercentage))
+                    }
+                }
+            } else {
+                Text("Record audio to see metrics...")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
     // MARK: - TTS Section
     
     private var ttsSection: some View {
@@ -170,6 +204,8 @@ struct AudioTestView: View {
     private func startRecording() {
         isRecording = true
         transcript = ""
+        metrics = nil
+        recordingStartTime = Date()
         
         recordingTask = Task {
             do {
@@ -205,6 +241,8 @@ struct AudioTestView: View {
         recordingTask?.cancel()
         recordingTask = nil
         
+        let duration = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
+        
         Task {
             await audioService.stopRecording()
             let finalTranscript = await speechService.stopRecognition()
@@ -213,6 +251,11 @@ struct AudioTestView: View {
                 if !finalTranscript.isEmpty {
                     transcript = finalTranscript
                 }
+                
+                if !transcript.isEmpty {
+                    metrics = nlpService.analyze(transcript: transcript, duration: duration)
+                }
+                
                 isRecording = false
             }
         }
@@ -231,6 +274,23 @@ struct AudioTestView: View {
             await MainActor.run {
                 isSpeaking = false
             }
+        }
+    }
+}
+
+// MARK: - Metric Row
+
+private struct MetricRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .fontWeight(.medium)
         }
     }
 }
