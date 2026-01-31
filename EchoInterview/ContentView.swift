@@ -35,6 +35,8 @@ struct ContentView: View {
             Text("Settings")
         case .audioTest:
             AudioTestView()
+        case .interviewSession:
+            InterviewRoomView(viewModel: InterviewSessionViewModel())
         }
     }
 }

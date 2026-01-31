@@ -5,6 +5,7 @@ enum Route: Hashable {
     case onboarding
     case sessionSetup
     case interviewRoom
+    case interviewSession
     case analytics
     case history
     case settings

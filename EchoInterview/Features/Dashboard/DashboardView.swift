@@ -8,10 +8,16 @@ struct DashboardView: View {
             Text("Dashboard")
                 .font(.largeTitle)
             
-            Button("Test Microphone Permission") {
-                viewModel.navigateToAudioTest()
+            Button("Start Interview Session") {
+                viewModel.navigateToInterviewSession()
             }
             .buttonStyle(.borderedProminent)
+            .tint(.green)
+            
+            Button("Test Audio & Permissions") {
+                viewModel.navigateToAudioTest()
+            }
+            .buttonStyle(.bordered)
         }
     }
 }

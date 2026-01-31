@@ -12,5 +12,9 @@ final class DashboardViewModel {
     func navigateToAudioTest() {
         router.navigate(to: .audioTest)
     }
+    
+    func navigateToInterviewSession() {
+        router.navigate(to: .interviewSession)
+    }
 }
 
