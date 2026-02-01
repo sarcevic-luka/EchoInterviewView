@@ -30,15 +30,28 @@ actor AudioServiceImpl: AudioService {
         try await setupAudioSession()
         
         let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
         
-        Self.logger.info("Audio format: \(format.sampleRate) Hz, \(format.channelCount) channels")
+        // Get the hardware format and create a compatible recording format
+        let hardwareFormat = inputNode.inputFormat(forBus: 0)
+        Self.logger.info("Hardware format: \(hardwareFormat.sampleRate) Hz, \(hardwareFormat.channelCount) channels")
+        
+        // Use nil format to let the system choose the best format
+        // This avoids format mismatch errors
+        let recordingFormat: AVAudioFormat?
+        if hardwareFormat.sampleRate > 0 && hardwareFormat.channelCount > 0 {
+            recordingFormat = hardwareFormat
+        } else {
+            // Fallback: create a standard format
+            recordingFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)
+        }
+        
+        Self.logger.info("Recording format: \(recordingFormat?.sampleRate ?? 0) Hz, \(recordingFormat?.channelCount ?? 0) channels")
         
         let (stream, continuation) = AsyncStream<AVAudioPCMBuffer>.makeStream()
         bufferContinuation = continuation
         
-        // Larger buffer for better speech recognition
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+        // Install tap with the compatible format
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: recordingFormat) { [weak self] buffer, _ in
             guard let self else { return }
             Task {
                 await self.handleBuffer(buffer)

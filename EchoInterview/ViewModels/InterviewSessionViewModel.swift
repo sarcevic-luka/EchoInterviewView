@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import os.log
 
 enum SessionState: Equatable {
@@ -21,6 +22,10 @@ final class InterviewSessionViewModel {
     private let llmService: LLMServiceProtocol
     private let persistenceService: PersistenceService?
     private let logger = Logger(subsystem: "EchoInterview", category: "InterviewSession")
+    
+    // Haptic generators
+    private let notificationGenerator = UINotificationFeedbackGenerator()
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .medium)
     
     private(set) var currentState: SessionState = .idle
     private(set) var currentQuestionIndex: Int = 0
@@ -90,6 +95,7 @@ final class InterviewSessionViewModel {
         currentTranscript = ""
         recordingStartTime = Date()
         errorMessage = nil
+        triggerImpact()
         
         recordingTask = Task {
             // Stop any ongoing TTS first so it doesn't interfere with recording
@@ -99,11 +105,15 @@ final class InterviewSessionViewModel {
                 let audioStream = try await audioService.startRecording()
                 let transcriptStream = try await speechService.startRecognition(audioStream: audioStream)
                 
+                logger.debug("Recording started")
+                
                 for await partialTranscript in transcriptStream {
                     currentTranscript = partialTranscript
                     currentState = .speaking(transcript: partialTranscript)
                 }
             } catch {
+                logger.error("Recording failed: \(error.localizedDescription)")
+                triggerHaptic(.error)
                 errorMessage = "Recording failed: \(error.localizedDescription)"
                 currentState = .listening
             }
@@ -114,6 +124,7 @@ final class InterviewSessionViewModel {
         recordingTask?.cancel()
         recordingTask = nil
         currentState = .analyzing
+        triggerImpact()
         
         let duration = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
         
@@ -124,18 +135,22 @@ final class InterviewSessionViewModel {
             let transcript = finalTranscript.isEmpty ? currentTranscript : finalTranscript
             
             guard !transcript.isEmpty else {
+                logger.warning("No speech detected in answer")
+                triggerHaptic(.warning)
+                errorMessage = "No speech was detected. Please try again."
                 currentState = .showingResults
                 return
             }
             
+            logger.debug("Analyzing transcript: \(transcript.prefix(100))...")
             let metrics = nlpService.analyze(transcript: transcript, duration: duration)
             
             let scores: AnswerScores
             do {
                 scores = try scoringService.calculateScores(metrics: metrics, transcript: transcript)
             } catch {
-                let logger = Logger(subsystem: "EchoInterview", category: "InterviewSession")
                 logger.error("Scoring failed: \(error.localizedDescription)")
+                triggerHaptic(.error)
                 errorMessage = "Failed to calculate scores: \(error.localizedDescription)"
                 currentState = .showingResults
                 return
@@ -153,6 +168,10 @@ final class InterviewSessionViewModel {
             // Generate contextual feedback tips
             let tips = await llmService.generateFeedback(answer: answer)
             currentTips = tips
+            
+            // Success haptic when scoring complete
+            triggerHaptic(.success)
+            logger.info("Answer scored: \(Int(scores.overall))/100")
             
             currentState = .showingResults
         }
@@ -224,10 +243,15 @@ final class InterviewSessionViewModel {
         let question = Question(text: questionText)
         questions.append(question)
         
+        // Haptic feedback when question is ready
+        triggerHaptic(.success)
+        logger.debug("Question generated: \(questionText.prefix(50))...")
+        
         // Speak the generated question
         do {
             try await ttsService.speak(questionText)
         } catch {
+            logger.warning("TTS failed: \(error.localizedDescription)")
             // TTS failed, continue anyway - user can still see the question
         }
     }
@@ -241,8 +265,18 @@ final class InterviewSessionViewModel {
             do {
                 try await ttsService.speak(question.text)
             } catch {
-                // TTS failed, continue anyway
+                logger.warning("TTS failed: \(error.localizedDescription)")
             }
         }
+    }
+    
+    // MARK: - Haptic Feedback
+    
+    private func triggerHaptic(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        notificationGenerator.notificationOccurred(type)
+    }
+    
+    private func triggerImpact() {
+        impactGenerator.impactOccurred()
     }
 }

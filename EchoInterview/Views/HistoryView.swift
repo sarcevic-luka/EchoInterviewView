@@ -4,13 +4,7 @@ import SwiftData
 struct HistoryView: View {
     @Bindable var viewModel: HistoryViewModel
     @Environment(Router.self) private var router
-    @State private var selectedSessionID: UUID?
-    @State private var showingSessionDetail = false
-    
-    private var selectedSession: InterviewSessionEntity? {
-        guard let id = selectedSessionID else { return nil }
-        return viewModel.sessions.first { $0.id == id }
-    }
+    @State private var selectedSession: SessionDetailData?
     
     var body: some View {
         Group {
@@ -27,23 +21,22 @@ struct HistoryView: View {
         .task {
             await viewModel.loadSessions()
         }
-        .sheet(isPresented: $showingSessionDetail) {
-            if let session = selectedSession {
-                NavigationStack {
-                    AnalyticsView(
-                        viewModel: AnalyticsViewModel(
-                            answers: session.toAnswers(),
-                            questions: session.toAnswers().enumerated().map { index, _ in
-                                Question(text: "Question \(index + 1)")
-                            }
-                        ),
-                        onDone: {
-                            showingSessionDetail = false
-                        },
-                        onSaveSession: nil
-                    )
-                }
+        .sheet(item: $selectedSession) { sessionData in
+            NavigationStack {
+                AnalyticsView(
+                    viewModel: AnalyticsViewModel(
+                        answers: sessionData.answers,
+                        questions: sessionData.answers.enumerated().map { index, _ in
+                            Question(text: "Question \(index + 1)")
+                        }
+                    ),
+                    onDone: {
+                        selectedSession = nil
+                    },
+                    onSaveSession: nil
+                )
             }
+            .presentationDragIndicator(.visible)
         }
     }
     
@@ -75,8 +68,13 @@ struct HistoryView: View {
                 SessionCard(session: session)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        selectedSessionID = session.id
-                        showingSessionDetail = true
+                        let answers = session.toAnswers()
+                        selectedSession = SessionDetailData(
+                            id: session.id,
+                            answers: answers,
+                            interviewType: session.interviewType,
+                            date: session.date
+                        )
                     }
             }
             .onDelete { offsets in
@@ -85,6 +83,15 @@ struct HistoryView: View {
         }
         .listStyle(.insetGrouped)
     }
+}
+
+// MARK: - Session Detail Data
+
+struct SessionDetailData: Identifiable {
+    let id: UUID
+    let answers: [Answer]
+    let interviewType: String
+    let date: Date
 }
 
 // MARK: - Session Card

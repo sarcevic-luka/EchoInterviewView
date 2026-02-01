@@ -59,7 +59,7 @@ struct AudioTestView: View {
     // MARK: - Permissions Section
     
     private var permissionsSection: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Permissions")
                 .font(.headline)
             
@@ -81,8 +81,10 @@ struct AudioTestView: View {
                 requestAllPermissions()
             }
             .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -104,8 +106,9 @@ struct AudioTestView: View {
                 HStack {
                     Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
                         .font(.title)
-                    Text(isRecording ? "Stop Recording" : "Start Recording (5s)")
+                    Text(isRecording ? "Stop Recording" : "Start Recording")
                 }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .tint(isRecording ? .red : .blue)
@@ -116,6 +119,7 @@ struct AudioTestView: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -123,7 +127,7 @@ struct AudioTestView: View {
     // MARK: - Transcript Section
     
     private var transcriptSection: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Transcript")
                 .font(.headline)
             
@@ -134,6 +138,7 @@ struct AudioTestView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -141,13 +146,12 @@ struct AudioTestView: View {
     // MARK: - Metrics Section
     
     private var metricsSection: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("NLP Metrics")
                 .font(.headline)
             
             if let metrics {
                 VStack(spacing: 12) {
-                    // Basic metrics
                     MetricRow(label: "Total Words", value: "\(metrics.totalWordCount)")
                     MetricRow(label: "Sentences", value: "\(metrics.sentenceCount)")
                     MetricRow(label: "Avg Sentence Length", value: String(format: "%.1f words", metrics.avgSentenceLength))
@@ -155,27 +159,23 @@ struct AudioTestView: View {
                     
                     Divider()
                     
-                    // Quality metrics
                     MetricRow(label: "Filler Words", value: "\(metrics.fillerWordCount)")
                     MetricRow(label: "Filler Ratio", value: String(format: "%.1f%%", metrics.fillerRatio * 100))
                     MetricRow(label: "Pause Count", value: "\(metrics.pauseCount)")
                     
                     Divider()
                     
-                    // Advanced metrics with progress bars
-                    VStack(spacing: 8) {
-                        MetricProgressRow(
-                            label: "Keyword Coverage",
-                            value: metrics.keywordCoverage,
-                            color: coverageColor(for: metrics.keywordCoverage)
-                        )
-                        
-                        MetricProgressRow(
-                            label: "Semantic Similarity",
-                            value: metrics.semanticSimilarity,
-                            color: similarityColor(for: metrics.semanticSimilarity)
-                        )
-                    }
+                    MetricProgressRow(
+                        label: "Keyword Coverage",
+                        value: metrics.keywordCoverage,
+                        color: coverageColor(for: metrics.keywordCoverage)
+                    )
+                    
+                    MetricProgressRow(
+                        label: "Semantic Similarity",
+                        value: metrics.semanticSimilarity,
+                        color: similarityColor(for: metrics.semanticSimilarity)
+                    )
                 }
             } else {
                 Text("Record audio to see metrics...")
@@ -183,6 +183,7 @@ struct AudioTestView: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -202,7 +203,7 @@ struct AudioTestView: View {
     // MARK: - Scores Section
     
     private var scoresSection: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Answer Scores")
                 .font(.headline)
             
@@ -223,12 +224,14 @@ struct AudioTestView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
+                .frame(maxWidth: .infinity)
             } else {
                 Text("Record audio to see scores...")
                     .foregroundStyle(.secondary)
             }
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -247,12 +250,14 @@ struct AudioTestView: View {
                     Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                     Text(isSpeaking ? "Speaking..." : "Speak Transcript")
                 }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .tint(.green)
             .disabled(transcript.isEmpty || isSpeaking)
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
