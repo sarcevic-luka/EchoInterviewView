@@ -160,7 +160,7 @@ The model was trained on interview transcript data and outputs scores from 0-100
 
 - iOS 17.0+
 - Xcode 15.0+
-- iPhone with microphone (Simulator has limited audio support)
+- iPhone with microphone (Simulator has limited audio support :7)
 
 ### Setup
 
@@ -185,11 +185,9 @@ The app includes an onboarding flow that will:
 **This is a practice/learning project!** 
 
 EchoInterview was built as an exploration of modern iOS development patterns including:
-- Swift 6 concurrency
 - SwiftUI animations
 - On-device ML/AI
 - Speech and audio processing
-- SwiftData persistence
 
 ### What This Means:
 
