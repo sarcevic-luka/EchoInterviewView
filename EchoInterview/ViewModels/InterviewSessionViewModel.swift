@@ -72,6 +72,7 @@ final class InterviewSessionViewModel {
     }
     
     func startListening() {
+
         currentState = .speaking(transcript: "")
         currentTranscript = ""
         recordingStartTime = Date()
@@ -83,9 +84,9 @@ final class InterviewSessionViewModel {
                 let transcriptStream = try await speechService.startRecognition(audioStream: audioStream)
                 
                 for await partialTranscript in transcriptStream {
-                    guard !Task.isCancelled else { break }
                     currentTranscript = partialTranscript
                     currentState = .speaking(transcript: partialTranscript)
+
                 }
             } catch {
                 errorMessage = "Recording failed: \(error.localizedDescription)"

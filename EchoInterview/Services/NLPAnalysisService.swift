@@ -105,7 +105,7 @@ final class NLPAnalysisService {
         var count = 0
         
         // Count single-word fillers
-        let singleWordFillers: Set<String> = ["um", "uh", "like"]
+        let singleWordFillers: Set<String> = ["um", "uh", "like", "basically"]
         for word in words {
             if singleWordFillers.contains(word.lowercased()) {
                 count += 1

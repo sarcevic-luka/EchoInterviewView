@@ -17,7 +17,8 @@ actor SpeechRecognitionServiceImpl: SpeechRecognitionService {
     private var currentSegmentTranscript: String = ""
     private var recognitionStreamTask: Task<Void, Never>?
     private var isListening: Bool = false
-    private var currentTaskId: Int = 0  // Track which task callbacks belong to
+    private var currentTaskId: Int = 0
+    private var lastSegmentCount: Int = 0  // Track segment count to detect restarts
     private static let logger = Logger(subsystem: "EchoInterview", category: "SpeechRecognition")
     
     init() {
@@ -41,6 +42,7 @@ actor SpeechRecognitionServiceImpl: SpeechRecognitionService {
         accumulatedTranscript = ""
         currentSegmentTranscript = ""
         currentTaskId = 0
+        lastSegmentCount = 0
         isListening = true
         
         let (stream, continuation) = AsyncStream<String>.makeStream()
@@ -72,6 +74,9 @@ actor SpeechRecognitionServiceImpl: SpeechRecognitionService {
         // Increment task ID to ignore callbacks from old tasks
         currentTaskId += 1
         let taskId = currentTaskId
+        
+        // Reset segment count for new task
+        lastSegmentCount = 0
         
         // Create new request FIRST before canceling old one (prevents buffer loss)
         let request = SFSpeechAudioBufferRecognitionRequest()
@@ -145,15 +150,36 @@ actor SpeechRecognitionServiceImpl: SpeechRecognitionService {
             
             Self.logger.debug("Task #\(taskId): \(segmentCount) segments, isFinal: \(result.isFinal)")
             
+            // CRITICAL FIX: Detect when segment count drops (recognizer internal restart)
+            // This happens when the recognizer loses context after a pause, BEFORE isFinal
+            if segmentCount < lastSegmentCount && !currentSegmentTranscript.isEmpty {
+                Self.logger.info("⚠️ Segment count dropped (\(self.lastSegmentCount) → \(segmentCount)), accumulating: '\(self.currentSegmentTranscript.prefix(50))...'")
+                
+                // Save the current segment before it's lost
+                if accumulatedTranscript.isEmpty {
+                    accumulatedTranscript = currentSegmentTranscript
+                } else {
+                    accumulatedTranscript += " " + currentSegmentTranscript
+                }
+                
+                Self.logger.info("✅ Total accumulated after drop: '\(self.accumulatedTranscript.prefix(100))...'")
+                currentSegmentTranscript = ""
+            }
+            
+            // Update segment count tracking
+            lastSegmentCount = segmentCount
+            
+            // Update current segment
             currentSegmentTranscript = segmentTranscript
             
-            // Yield the full accumulated transcript
+            // Yield the full accumulated transcript (this is what the ViewModel sees!)
             let fullTranscript = buildFullTranscript()
             transcriptContinuation?.yield(fullTranscript)
             
             if result.isFinal {
                 // Recognition auto-stopped (silence) - save segment and restart
-                Self.logger.info("Task #\(taskId) finished, accumulating: \(segmentTranscript.prefix(50))...")
+                Self.logger.info("Task #\(taskId) finished (isFinal), accumulating: '\(segmentTranscript.prefix(50))...'")
+                
                 if !segmentTranscript.isEmpty {
                     if accumulatedTranscript.isEmpty {
                         accumulatedTranscript = segmentTranscript
@@ -161,8 +187,11 @@ actor SpeechRecognitionServiceImpl: SpeechRecognitionService {
                         accumulatedTranscript += " " + segmentTranscript
                     }
                 }
+                
                 currentSegmentTranscript = ""
-                Self.logger.info("Total accumulated: \(self.accumulatedTranscript.prefix(100))...")
+                lastSegmentCount = 0  // Reset for next task
+                
+                Self.logger.info("✅ Total accumulated after isFinal: '\(self.accumulatedTranscript.prefix(100))...'")
                 
                 // RESTART recognition to keep listening
                 if isListening {
