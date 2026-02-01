@@ -38,11 +38,11 @@ Think of it as having a patient interviewer who never judges, always provides co
 ---
 
 ## Screenshots 📱
-<img width="1320" height="2868" alt="Simulator Screenshot - iPhone 17 Pro Max - 2026-02-01 at 21 08 35" src="https://github.com/user-attachments/assets/5d657446-d6ae-425e-89c0-2640b17c3a10" />
+<img width="660" height="1434" alt="Simulator Screenshot - iPhone 17 Pro Max - 2026-02-01 at 21 08 35" src="https://github.com/user-attachments/assets/5d657446-d6ae-425e-89c0-2640b17c3a10" />
 
-<img width="1320" height="2868" alt="Simulator Screenshot - iPhone 17 Pro Max - 2026-02-01 at 21 08 57" src="https://github.com/user-attachments/assets/7af67f77-d35f-4aba-aa9f-41615d6614d2" />
+<img width="660" height="1434" alt="Simulator Screenshot - iPhone 17 Pro Max - 2026-02-01 at 21 08 57" src="https://github.com/user-attachments/assets/7af67f77-d35f-4aba-aa9f-41615d6614d2" />
 
-<img width="1320" height="2868" alt="Simulator Screenshot - iPhone 17 Pro Max - 2026-02-01 at 21 09 26" src="https://github.com/user-attachments/assets/ea2fd918-3830-46f1-b563-eed7466ef423" />
+<img width="660" height="1434" alt="Simulator Screenshot - iPhone 17 Pro Max - 2026-02-01 at 21 09 26" src="https://github.com/user-attachments/assets/ea2fd918-3830-46f1-b563-eed7466ef423" />
 
 ---
 
