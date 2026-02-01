@@ -27,11 +27,19 @@ struct EchoInterviewApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(router)
-                .environment(appState)
-                .environment(\.serviceContainer, serviceContainer)
-                .modelContainer(modelContainer)
+            Group {
+                if appState.hasCompletedOnboarding {
+                    ContentView()
+                } else {
+                    OnboardingView {
+                        appState.completeOnboarding()
+                    }
+                }
+            }
+            .environment(router)
+            .environment(appState)
+            .environment(\.serviceContainer, serviceContainer)
+            .modelContainer(modelContainer)
         }
     }
 }

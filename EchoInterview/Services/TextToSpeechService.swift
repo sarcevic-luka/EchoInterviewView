@@ -10,6 +10,11 @@ actor TextToSpeechServiceImpl: TextToSpeechService {
     private let delegate: SpeechDelegate
     private var speakContinuation: CheckedContinuation<Void, Error>?
     
+    private enum UserDefaultsKeys {
+        static let voiceIdentifier = "settings.voiceIdentifier"
+        static let speechRate = "settings.speechRate"
+    }
+    
     init() {
         self.synthesizer = AVSpeechSynthesizer()
         self.delegate = SpeechDelegate()
@@ -17,6 +22,13 @@ actor TextToSpeechServiceImpl: TextToSpeechService {
     }
     
     func speak(_ text: String) async throws {
+        // Cancel any ongoing speech first
+        if speakContinuation != nil {
+            synthesizer.stopSpeaking(at: .immediate)
+            speakContinuation?.resume(throwing: TextToSpeechError.cancelled)
+            speakContinuation = nil
+        }
+        
         try await setupAudioSessionForPlayback()
         
         delegate.onFinish = { [weak self] in
@@ -28,17 +40,35 @@ actor TextToSpeechServiceImpl: TextToSpeechService {
         }
         
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            speakContinuation = continuation
-            synthesizer.speak(utterance)
+        // Load voice preference from UserDefaults
+        let defaults = UserDefaults.standard
+        if let voiceIdentifier = defaults.string(forKey: UserDefaultsKeys.voiceIdentifier),
+           let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) {
+            utterance.voice = voice
+        } else {
+            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        }
+        
+        // Load speech rate preference from UserDefaults
+        if let savedRate = defaults.object(forKey: UserDefaultsKeys.speechRate) as? Float {
+            utterance.rate = savedRate
+        } else {
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        }
+        
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            self.speakContinuation = continuation
+            self.synthesizer.speak(utterance)
         }
     }
     
     func stop() async {
-        synthesizer.stopSpeaking(at: .immediate)
+        if speakContinuation != nil {
+            synthesizer.stopSpeaking(at: .immediate)
+            speakContinuation?.resume(throwing: TextToSpeechError.cancelled)
+            speakContinuation = nil
+        }
     }
     
     private func setupAudioSessionForPlayback() async throws {

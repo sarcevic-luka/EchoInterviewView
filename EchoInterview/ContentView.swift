@@ -6,15 +6,16 @@ struct ContentView: View {
     @Environment(\.serviceContainer) private var serviceContainer
     @Environment(\.modelContext) private var modelContext
     
+    private var persistenceService: PersistenceService {
+        PersistenceService(modelContainer: modelContext.container)
+    }
+    
     var body: some View {
         NavigationStack(path: Bindable(router).path) {
-            DashboardView(viewModel: DashboardViewModel(
-                router: router,
-                serviceContainer: serviceContainer
-            ))
-            .navigationDestination(for: Route.self) { route in
-                destinationView(for: route)
-            }
+            DashboardView(viewModel: makeDashboardViewModel())
+                .navigationDestination(for: Route.self) { route in
+                    destinationView(for: route)
+                }
         }
     }
     
@@ -22,32 +23,41 @@ struct ContentView: View {
     private func destinationView(for route: Route) -> some View {
         switch route {
         case .dashboard:
-            DashboardView(viewModel: DashboardViewModel(
-                router: router,
-                serviceContainer: serviceContainer
-            ))
+            DashboardView(viewModel: makeDashboardViewModel())
         case .onboarding:
-            Text("Onboarding")
+            OnboardingView(onComplete: {
+                router.navigateToRoot()
+            })
         case .sessionSetup:
             Text("Session Setup")
-        case .interviewRoom:
+        case .interviewRoom, .interviewSession:
             InterviewRoomView(viewModel: makeInterviewViewModel())
         case .analytics:
             Text("Analytics")
         case .history:
-            Text("History")
+            HistoryView(viewModel: HistoryViewModel(persistenceService: persistenceService))
         case .settings:
-            Text("Settings")
+            SettingsView(viewModel: SettingsViewModel(
+                persistenceService: persistenceService,
+                audioService: serviceContainer.audioService,
+                speechService: serviceContainer.speechService
+            ))
         case .audioTest:
             AudioTestView()
-        case .interviewSession:
-            InterviewRoomView(viewModel: makeInterviewViewModel())
         }
     }
     
+    private func makeDashboardViewModel() -> DashboardViewModel {
+        let viewModel = DashboardViewModel(
+            router: router,
+            serviceContainer: serviceContainer,
+            persistenceService: persistenceService
+        )
+        return viewModel
+    }
+    
     private func makeInterviewViewModel() -> InterviewSessionViewModel {
-        let persistenceService = PersistenceService(modelContainer: modelContext.container)
-        return InterviewSessionViewModel(
+        InterviewSessionViewModel(
             audioService: serviceContainer.audioService,
             speechService: serviceContainer.speechService,
             ttsService: serviceContainer.ttsService,
@@ -64,4 +74,5 @@ struct ContentView: View {
         .environment(Router())
         .environment(AppState())
         .environment(\.serviceContainer, .shared)
+        .modelContainer(try! ModelContainer(for: InterviewSessionEntity.self))
 }
