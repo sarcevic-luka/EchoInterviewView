@@ -8,6 +8,53 @@ final class SimpleScoringService: ScoringProtocol {
         let overall = calculateOverallScore(metrics: metrics, technical: technical)
         let confidence = calculateConfidence(overall: overall, semanticSimilarity: metrics.semanticSimilarity)
         
+        // Debug breakdown
+        let wordCountBonus: Double
+        if metrics.totalWordCount >= 20 && metrics.totalWordCount <= 100 {
+            wordCountBonus = 20
+        } else if metrics.totalWordCount >= 10 && metrics.totalWordCount < 20 {
+            wordCountBonus = 10
+        } else {
+            wordCountBonus = 5
+        }
+        let fillerPenalty = Double(metrics.fillerWordCount) * 2
+        let semanticBonus = metrics.semanticSimilarity * 30
+        let technicalBonus = (technical / 100) * 10
+        
+        print("""
+        
+        ════════════════════════════════════════════════════════════
+        📊 SIMPLE SCORING DEBUG (Fallback)
+        ════════════════════════════════════════════════════════════
+        
+        RAW METRICS:
+        ├── totalWordCount:      \(metrics.totalWordCount)
+        ├── fillerWordCount:     \(metrics.fillerWordCount)
+        ├── fillerRatio:         \(String(format: "%.2f", metrics.fillerRatio))
+        ├── sentenceCount:       \(metrics.sentenceCount)
+        ├── avgSentenceLength:   \(String(format: "%.1f", metrics.avgSentenceLength))
+        ├── semanticSimilarity:  \(String(format: "%.2f", metrics.semanticSimilarity))
+        ├── keywordCoverage:     \(String(format: "%.2f", metrics.keywordCoverage))
+        ├── speechRate:          \(String(format: "%.1f", metrics.speechRate)) wpm
+        └── pauseCount:          \(metrics.pauseCount)
+        
+        OVERALL SCORE BREAKDOWN:
+        ├── baseline:            40.0
+        ├── wordCountBonus:      +\(String(format: "%.1f", wordCountBonus)) (words: \(metrics.totalWordCount))
+        ├── semanticBonus:       +\(String(format: "%.1f", semanticBonus)) (sim * 30)
+        ├── technicalBonus:      +\(String(format: "%.1f", technicalBonus)) (tech/100 * 10)
+        ├── fillerPenalty:       -\(String(format: "%.1f", fillerPenalty)) (fillers * 2)
+        └── TOTAL:               \(String(format: "%.1f", overall))
+        
+        SUB-SCORES:
+        ├── clarity:             \(String(format: "%.1f", clarity))
+        ├── confidence:          \(String(format: "%.1f", confidence))
+        ├── technical:           \(String(format: "%.1f", technical))
+        └── pace:                \(String(format: "%.1f", pace))
+        ════════════════════════════════════════════════════════════
+        
+        """)
+        
         return AnswerScores(
             overall: overall,
             clarity: clarity,

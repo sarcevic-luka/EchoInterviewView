@@ -73,14 +73,99 @@ final class CoreMLScoringService: ScoringProtocol {
             )
             
             let output = try model.prediction(input: input)
-            let overall = sanitize(output.score, min: 0, max: 100)
+            var overall = sanitize(output.score, min: 0, max: 100)
             
-            Self.logger.debug("CoreML prediction successful, overall score: \(overall)")
+            // POST-PROCESSING PENALTIES (stricter scoring)
+            
+            // 1. Extreme speech rate penalty
+            if speechRate > 250 {
+                let speedPenalty = Double(speechRate - 250) / 10  // -1 point per 10 wpm over 250
+                overall -= speedPenalty
+            } else if speechRate < 80 {
+                let slowPenalty = Double(80 - speechRate) / 5  // -1 point per 5 wpm under 80
+                overall -= slowPenalty
+            }
+            
+            // 2. High filler ratio penalty (harsh on filler-heavy answers)
+            if fillerRatio > 0.2 {
+                let fillerPenalty = (fillerRatio - 0.2) * 100  // -10 points for every 10% over 20%
+                overall -= fillerPenalty
+            }
+            
+            // 3. Very short answer penalty
+            if metrics.totalWordCount < 15 {
+                overall -= Double(15 - metrics.totalWordCount) * 2  // -2 points per missing word
+            }
+            
+            // 4. Low keyword coverage with low similarity = off-topic
+            if keywordCoverage < 0.2 && semanticSimilarity < 0.5 {
+                overall -= 15  // Off-topic penalty
+            }
+            
+            // 5. Cap at 95 unless exceptional (prevents easy 100s)
+            if overall > 95 && semanticSimilarity < 0.95 {
+                overall = 95
+            }
+            
+            overall = sanitize(overall, min: 0, max: 100)
             
             let clarity = calculateClarity(metrics)
             let confidence = calculateConfidence(metrics, overall: overall)
             let technical = calculateTechnical(metrics)
             let pace = calculatePace(metrics)
+            
+            // Calculate penalties for debug
+            let rawScore = output.score
+            var speedPenalty = 0.0
+            var fillerPenalty = 0.0
+            var shortPenalty = 0.0
+            var offTopicPenalty = 0.0
+            var cap95Applied = false
+            
+            if speechRate > 250 { speedPenalty = Double(speechRate - 250) / 10 }
+            else if speechRate < 80 { speedPenalty = Double(80 - speechRate) / 5 }
+            if fillerRatio > 0.2 { fillerPenalty = (fillerRatio - 0.2) * 100 }
+            if metrics.totalWordCount < 15 { shortPenalty = Double(15 - metrics.totalWordCount) * 2 }
+            if keywordCoverage < 0.2 && semanticSimilarity < 0.5 { offTopicPenalty = 15 }
+            if rawScore > 95 && semanticSimilarity < 0.95 { cap95Applied = true }
+            
+            // Detailed debug output
+            print("""
+            
+            ════════════════════════════════════════════════════════════
+            📊 SCORING DEBUG
+            ════════════════════════════════════════════════════════════
+            
+            INPUT METRICS:
+            ├── keyword_coverage:    \(String(format: "%.2f", keywordCoverage)) (0=none, 1=many tech words)
+            ├── filler_ratio:        \(String(format: "%.2f", fillerRatio)) (0=none, 1=all fillers)
+            ├── sentence_count:      \(sentenceCount)
+            ├── avg_sentence_length: \(String(format: "%.1f", avgSentenceLength)) words
+            ├── semantic_similarity: \(String(format: "%.2f", semanticSimilarity)) (0=unrelated, 1=perfect match)
+            ├── speech_rate:         \(speechRate) wpm (ideal: 120-180)
+            ├── word_count:          \(metrics.totalWordCount)
+            └── pause_count:         \(pauseCount)
+            
+            COREML RAW SCORE:        \(String(format: "%.1f", rawScore))
+            
+            POST-PROCESSING PENALTIES:
+            ├── speed penalty:       \(speedPenalty > 0 ? "-" : "")\(String(format: "%.1f", speedPenalty)) \(speechRate > 250 ? "(too fast)" : speechRate < 80 ? "(too slow)" : "(ok)")
+            ├── filler penalty:      \(fillerPenalty > 0 ? "-" : "")\(String(format: "%.1f", fillerPenalty)) \(fillerRatio > 0.2 ? "(>\(Int(fillerRatio*100))% fillers!)" : "(ok)")
+            ├── short answer penalty:-\(String(format: "%.1f", shortPenalty)) \(metrics.totalWordCount < 15 ? "(<15 words)" : "(ok)")
+            ├── off-topic penalty:   -\(String(format: "%.1f", offTopicPenalty)) \(offTopicPenalty > 0 ? "(low keywords + similarity)" : "(ok)")
+            └── capped at 95:        \(cap95Applied ? "YES (need 95%+ similarity for 100)" : "no")
+            
+            CALCULATED SUB-SCORES:
+            ├── clarity:             \(String(format: "%.1f", clarity))
+            ├── confidence:          \(String(format: "%.1f", confidence))
+            ├── technical:           \(String(format: "%.1f", technical))
+            └── pace:                \(String(format: "%.1f", pace))
+            
+            ═══════════════════════════════════════════════════════════
+            FINAL OVERALL:           \(String(format: "%.1f", overall))
+            ════════════════════════════════════════════════════════════
+            
+            """)
             
             return AnswerScores(
                 overall: overall,
