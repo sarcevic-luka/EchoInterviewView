@@ -5,6 +5,7 @@ struct AnalyticsView: View {
     @State private var isTranscriptExpanded = false
     
     let onDone: () -> Void
+    var onSaveSession: (() async -> Void)?
     
     var body: some View {
         ScrollView {
@@ -20,6 +21,9 @@ struct AnalyticsView: View {
         }
         .navigationTitle("Analytics")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await onSaveSession?()
+        }
     }
     
     // MARK: - Overall Score Section
@@ -321,7 +325,8 @@ private struct MetricCard: View {
     NavigationStack {
         AnalyticsView(
             viewModel: AnalyticsViewModel(answers: mockAnswers, questions: questions),
-            onDone: {}
+            onDone: {},
+            onSaveSession: nil
         )
     }
 }

@@ -208,6 +208,9 @@ struct InterviewRoomView: View {
                         ),
                         onDone: {
                             router.navigateToRoot()
+                        },
+                        onSaveSession: {
+                            await viewModel.completeInterview()
                         }
                     )
                 } label: {

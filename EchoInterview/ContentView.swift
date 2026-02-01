@@ -1,8 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     @Environment(Router.self) private var router
     @Environment(\.serviceContainer) private var serviceContainer
+    @Environment(\.modelContext) private var modelContext
     
     var body: some View {
         NavigationStack(path: Bindable(router).path) {
@@ -29,13 +31,7 @@ struct ContentView: View {
         case .sessionSetup:
             Text("Session Setup")
         case .interviewRoom:
-            InterviewRoomView(viewModel: InterviewSessionViewModel(
-                audioService: serviceContainer.audioService,
-                speechService: serviceContainer.speechService,
-                ttsService: serviceContainer.ttsService,
-                nlpService: serviceContainer.nlpService,
-                scoringService: serviceContainer.scoringService
-            ))
+            InterviewRoomView(viewModel: makeInterviewViewModel())
         case .analytics:
             Text("Analytics")
         case .history:
@@ -45,14 +41,21 @@ struct ContentView: View {
         case .audioTest:
             AudioTestView()
         case .interviewSession:
-            InterviewRoomView(viewModel: InterviewSessionViewModel(
-                audioService: serviceContainer.audioService,
-                speechService: serviceContainer.speechService,
-                ttsService: serviceContainer.ttsService,
-                nlpService: serviceContainer.nlpService,
-                scoringService: serviceContainer.scoringService
-            ))
+            InterviewRoomView(viewModel: makeInterviewViewModel())
         }
+    }
+    
+    private func makeInterviewViewModel() -> InterviewSessionViewModel {
+        let persistenceService = PersistenceService(modelContainer: modelContext.container)
+        return InterviewSessionViewModel(
+            audioService: serviceContainer.audioService,
+            speechService: serviceContainer.speechService,
+            ttsService: serviceContainer.ttsService,
+            nlpService: serviceContainer.nlpService,
+            scoringService: serviceContainer.scoringService,
+            llmService: serviceContainer.llmService,
+            persistenceService: persistenceService
+        )
     }
 }
 

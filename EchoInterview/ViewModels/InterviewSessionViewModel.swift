@@ -19,12 +19,15 @@ final class InterviewSessionViewModel {
     private let nlpService: NLPAnalysisService
     private let scoringService: any ScoringProtocol
     private let llmService: LLMServiceProtocol
+    private let persistenceService: PersistenceService?
+    private let logger = Logger(subsystem: "EchoInterview", category: "InterviewSession")
     
     private(set) var currentState: SessionState = .idle
     private(set) var currentQuestionIndex: Int = 0
     private(set) var answers: [Answer] = []
     private(set) var questions: [Question] = []
     private(set) var currentTips: [String] = []
+    private(set) var isSessionSaved: Bool = false
     var errorMessage: String?
     
     private var recordingStartTime: Date?
@@ -54,6 +57,7 @@ final class InterviewSessionViewModel {
         nlpService: NLPAnalysisService = NLPAnalysisService(),
         scoringService: any ScoringProtocol = SimpleScoringService(),
         llmService: LLMServiceProtocol = LLMService(),
+        persistenceService: PersistenceService? = nil,
         interviewType: String = "Software Engineering",
         totalQuestions: Int = 5
     ) {
@@ -63,6 +67,7 @@ final class InterviewSessionViewModel {
         self.nlpService = nlpService
         self.scoringService = scoringService
         self.llmService = llmService
+        self.persistenceService = persistenceService
         self.interviewType = interviewType
         self.totalQuestions = totalQuestions
     }
@@ -176,10 +181,33 @@ final class InterviewSessionViewModel {
         currentTips = []
         currentTranscript = ""
         errorMessage = nil
+        isSessionSaved = false
     }
     
     func dismissError() {
         errorMessage = nil
+    }
+    
+    func completeInterview() async {
+        guard !answers.isEmpty, !isSessionSaved else { return }
+        
+        guard let persistenceService else {
+            logger.warning("No persistence service available, session not saved")
+            return
+        }
+        
+        guard let entity = InterviewSessionEntity.from(answers: answers, interviewType: interviewType) else {
+            logger.error("Failed to create session entity")
+            return
+        }
+        
+        do {
+            try await persistenceService.saveSession(entity)
+            isSessionSaved = true
+            logger.info("Interview session saved successfully")
+        } catch {
+            logger.error("Failed to save session: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - Private Methods
