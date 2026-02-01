@@ -9,7 +9,9 @@ final class ServiceContainer: @unchecked Sendable {
     let ttsService: any TextToSpeechService
     let nlpService: NLPAnalysisService
     let scoringService: any ScoringProtocol
+    let llmService: LLMServiceProtocol
     let isUsingCoreML: Bool
+    let isUsingLLM: Bool
     
     private static let logger = Logger(subsystem: "EchoInterview", category: "ServiceContainer")
     
@@ -18,6 +20,16 @@ final class ServiceContainer: @unchecked Sendable {
         self.speechService = SpeechRecognitionServiceImpl()
         self.ttsService = TextToSpeechServiceImpl()
         self.nlpService = NLPAnalysisService()
+        
+        // Initialize LLM service
+        let llm = LLMService()
+        self.llmService = llm
+        self.isUsingLLM = llm.isAvailable
+        if llm.isAvailable {
+            Self.logger.info("Using LLM for question generation")
+        } else {
+            Self.logger.info("Using fallback questions (LLM not available)")
+        }
         
         // Try CoreML scoring, fallback to simple scoring
         if let mlService = try? CoreMLScoringService() {

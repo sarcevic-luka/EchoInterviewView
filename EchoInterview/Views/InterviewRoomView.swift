@@ -32,7 +32,7 @@ struct InterviewRoomView: View {
     
     private var progressSection: some View {
         VStack(spacing: 8) {
-            Text("Question \(viewModel.currentQuestionIndex + 1) of \(viewModel.questions.count)")
+            Text("Question \(viewModel.currentQuestionIndex + 1) of \(viewModel.totalQuestions)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             
