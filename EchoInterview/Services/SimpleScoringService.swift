@@ -1,7 +1,7 @@
 import Foundation
 
-final class SimpleScoringService {
-    func calculateScores(metrics: NLPMetrics) -> AnswerScores {
+final class SimpleScoringService: ScoringProtocol {
+    func calculateScores(metrics: NLPMetrics) throws -> AnswerScores {
         let clarity = calculateClarity(metrics: metrics)
         let technical = calculateTechnicalScore(metrics: metrics)
         let pace = calculatePaceScore(speechRate: metrics.speechRate)

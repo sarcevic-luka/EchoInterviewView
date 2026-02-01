@@ -1,5 +1,6 @@
 import AVFoundation
 import Speech
+import os.log
 
 protocol SpeechRecognitionService: Actor {
     func requestAuthorization() async -> Bool
@@ -12,8 +13,12 @@ actor SpeechRecognitionServiceImpl: SpeechRecognitionService {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var transcriptContinuation: AsyncStream<String>.Continuation?
-    private var finalTranscript: String = ""
+    private var accumulatedTranscript: String = ""
+    private var currentSegmentTranscript: String = ""
     private var recognitionStreamTask: Task<Void, Never>?
+    private var isListening: Bool = false
+    private var currentTaskId: Int = 0  // Track which task callbacks belong to
+    private static let logger = Logger(subsystem: "EchoInterview", category: "SpeechRecognition")
     
     init() {
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -32,61 +37,146 @@ actor SpeechRecognitionServiceImpl: SpeechRecognitionService {
             throw SpeechRecognitionError.recognizerUnavailable
         }
         
-        finalTranscript = ""
-        
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.requiresOnDeviceRecognition = true
-        request.shouldReportPartialResults = true
-        recognitionRequest = request
+        // Reset state for new recording session
+        accumulatedTranscript = ""
+        currentSegmentTranscript = ""
+        currentTaskId = 0
+        isListening = true
         
         let (stream, continuation) = AsyncStream<String>.makeStream()
         transcriptContinuation = continuation
         
-        recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
-            
-            Task {
-                await self.handleRecognitionResult(result: result, error: error)
-            }
-        }
+        // Start the recognition task
+        startNewRecognitionTask()
         
+        Self.logger.info("Starting speech recognition")
+        
+        // Process audio buffers
         recognitionStreamTask = Task {
+            var bufferCount = 0
             for await buffer in audioStream {
-                guard !Task.isCancelled else { break }
+                guard !Task.isCancelled, isListening else { break }
                 recognitionRequest?.append(buffer)
+                bufferCount += 1
             }
+            Self.logger.debug("Audio stream ended after \(bufferCount) buffers")
             recognitionRequest?.endAudio()
         }
         
         return stream
     }
     
+    private func startNewRecognitionTask() {
+        guard let speechRecognizer, isListening else { return }
+        
+        // Increment task ID to ignore callbacks from old tasks
+        currentTaskId += 1
+        let taskId = currentTaskId
+        
+        // Create new request FIRST before canceling old one (prevents buffer loss)
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        request.taskHint = .dictation
+        request.addsPunctuation = true
+        
+        if speechRecognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
+        
+        // Atomically swap the request
+        let oldTask = recognitionTask
+        recognitionRequest = request
+        oldTask?.cancel()
+        
+        Self.logger.debug("Started task #\(taskId) (accumulated: \(self.accumulatedTranscript.count) chars)")
+        
+        recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
+            guard let self else { return }
+            
+            Task {
+                await self.handleRecognitionResult(result: result, error: error, taskId: taskId)
+            }
+        }
+    }
+    
     func stopRecognition() async -> String {
+        // Mark as not listening FIRST to prevent restarts
+        isListening = false
+        
+        // Combine accumulated transcript with current segment
+        let fullTranscript = buildFullTranscript()
+        Self.logger.info("USER stopped recognition, full transcript: \(fullTranscript.prefix(100))...")
+        
         recognitionStreamTask?.cancel()
         recognitionStreamTask = nil
         recognitionRequest?.endAudio()
-        recognitionTask?.finish()
+        recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
         transcriptContinuation?.finish()
         transcriptContinuation = nil
         
-        return finalTranscript
+        return fullTranscript
     }
     
-    private func handleRecognitionResult(result: SFSpeechRecognitionResult?, error: Error?) {
+    private func buildFullTranscript() -> String {
+        if accumulatedTranscript.isEmpty {
+            return currentSegmentTranscript
+        } else if currentSegmentTranscript.isEmpty {
+            return accumulatedTranscript
+        } else {
+            return accumulatedTranscript + " " + currentSegmentTranscript
+        }
+    }
+    
+    private func handleRecognitionResult(result: SFSpeechRecognitionResult?, error: Error?, taskId: Int) {
+        // Ignore callbacks from old/cancelled tasks
+        guard taskId == currentTaskId else {
+            Self.logger.debug("Ignoring callback from old task #\(taskId) (current: \(self.currentTaskId))")
+            return
+        }
+        
+        // Ignore results if we've stopped listening
+        guard isListening else { return }
+        
         if let result {
-            let transcript = result.bestTranscription.formattedString
-            finalTranscript = transcript
-            transcriptContinuation?.yield(transcript)
+            let segmentTranscript = result.bestTranscription.formattedString
+            let segmentCount = result.bestTranscription.segments.count
+            
+            Self.logger.debug("Task #\(taskId): \(segmentCount) segments, isFinal: \(result.isFinal)")
+            
+            currentSegmentTranscript = segmentTranscript
+            
+            // Yield the full accumulated transcript
+            let fullTranscript = buildFullTranscript()
+            transcriptContinuation?.yield(fullTranscript)
             
             if result.isFinal {
-                transcriptContinuation?.finish()
+                // Recognition auto-stopped (silence) - save segment and restart
+                Self.logger.info("Task #\(taskId) finished, accumulating: \(segmentTranscript.prefix(50))...")
+                if !segmentTranscript.isEmpty {
+                    if accumulatedTranscript.isEmpty {
+                        accumulatedTranscript = segmentTranscript
+                    } else {
+                        accumulatedTranscript += " " + segmentTranscript
+                    }
+                }
+                currentSegmentTranscript = ""
+                Self.logger.info("Total accumulated: \(self.accumulatedTranscript.prefix(100))...")
+                
+                // RESTART recognition to keep listening
+                if isListening {
+                    startNewRecognitionTask()
+                }
             }
         }
         
-        if error != nil {
-            transcriptContinuation?.finish()
+        if let error {
+            Self.logger.error("Task #\(taskId) error: \(error.localizedDescription)")
+            // Only restart on error if this is the current task and still listening
+            if taskId == currentTaskId, isListening {
+                startNewRecognitionTask()
+            }
         }
     }
 }

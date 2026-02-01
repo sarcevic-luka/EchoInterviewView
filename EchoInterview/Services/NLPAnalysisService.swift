@@ -5,6 +5,16 @@ final class NLPAnalysisService {
         "um", "uh", "like", "you know", "sort of", "kind of"
     ]
     
+    private let technicalKeywords: Set<String> = [
+        "swift", "swiftui", "ios", "app", "mobile", "api", "database", "server",
+        "architecture", "mvvm", "mvc", "design", "pattern", "test", "testing",
+        "performance", "optimization", "algorithm", "data", "structure", "code",
+        "programming", "development", "agile", "scrum", "git", "deploy", "ci",
+        "cd", "framework", "library", "sdk", "xcode", "debug", "feature",
+        "project", "team", "collaboration", "problem", "solution", "challenge",
+        "implement", "build", "create", "develop", "integrate", "scale"
+    ]
+    
     private let idealAnswer = """
         I built a mobile app using Swift and SwiftUI. The main challenge was state management \
         across multiple screens. I solved it by implementing MVVM with Combine for reactive updates.
@@ -20,12 +30,18 @@ final class NLPAnalysisService {
         let fillerWordCount = countFillerWords(in: transcript.lowercased(), words: words)
         let speechRate = duration > 0 ? Double(totalWordCount) / (duration / 60.0) : 0
         let semanticSimilarity = calculateSemanticSimilarity(transcript: transcript)
+        let sentenceCount = countSentences(in: transcript)
+        let pauseCount = estimatePauseCount(transcript: transcript, duration: duration, wordCount: totalWordCount)
+        let keywordCoverage = calculateKeywordCoverage(words: words)
         
         return NLPMetrics(
             totalWordCount: totalWordCount,
             fillerWordCount: fillerWordCount,
             speechRate: speechRate,
-            semanticSimilarity: semanticSimilarity
+            semanticSimilarity: semanticSimilarity,
+            sentenceCount: sentenceCount,
+            pauseCount: pauseCount,
+            keywordCoverage: keywordCoverage
         )
     }
     
@@ -107,5 +123,61 @@ final class NLPAnalysisService {
         }
         
         return count
+    }
+    
+    // MARK: - Sentence Detection
+    
+    private func countSentences(in text: String) -> Int {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        
+        var count = 0
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { _, _ in
+            count += 1
+            return true
+        }
+        
+        return max(count, 1)
+    }
+    
+    // MARK: - Pause Estimation
+    
+    private func estimatePauseCount(transcript: String, duration: TimeInterval, wordCount: Int) -> Int {
+        guard duration > 0, wordCount > 0 else { return 0 }
+        
+        // Estimate pauses based on speech rate deviation from ideal
+        // Ideal speech rate: ~150 wpm
+        // If speaking slower, likely more pauses
+        let actualRate = Double(wordCount) / (duration / 60.0)
+        let idealRate = 150.0
+        
+        // Count punctuation-based pauses (commas, periods indicate natural pauses)
+        let punctuationPauses = transcript.filter { $0 == "," || $0 == "." || $0 == ";" }.count
+        
+        // Estimate additional pauses if speaking slower than ideal
+        let ratePauses: Int
+        if actualRate < idealRate {
+            let slowdownFactor = (idealRate - actualRate) / idealRate
+            ratePauses = Int(slowdownFactor * Double(wordCount) / 10)
+        } else {
+            ratePauses = 0
+        }
+        
+        return punctuationPauses + ratePauses
+    }
+    
+    // MARK: - Keyword Coverage
+    
+    private func calculateKeywordCoverage(words: [String]) -> Double {
+        guard !words.isEmpty else { return 0 }
+        
+        let lowercasedWords = Set(words.map { $0.lowercased() })
+        let matchedKeywords = technicalKeywords.intersection(lowercasedWords)
+        
+        // Coverage is ratio of matched keywords to a reasonable expectation (e.g., 5 keywords)
+        let expectedKeywords = 5.0
+        let coverage = Double(matchedKeywords.count) / expectedKeywords
+        
+        return min(coverage, 1.0)
     }
 }

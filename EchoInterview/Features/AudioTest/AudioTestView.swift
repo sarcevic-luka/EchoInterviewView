@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct AudioTestView: View {
     @State private var permissionStatus: String = "Not requested"
@@ -10,12 +11,15 @@ struct AudioTestView: View {
     @State private var recordingStartTime: Date?
     @State private var metrics: NLPMetrics?
     @State private var scores: AnswerScores?
+    @State private var scoringError: String?
+    
+    private let logger = Logger(subsystem: "EchoInterview", category: "AudioTestView")
     
     private let audioService: any AudioService
     private let speechService: any SpeechRecognitionService
     private let ttsService: any TextToSpeechService
     private let nlpService: NLPAnalysisService
-    private let scoringService: SimpleScoringService
+    private let scoringService: any ScoringProtocol
     
     private var allPermissionsGranted: Bool {
         permissionStatus == "Granted" && speechPermissionStatus == "Granted"
@@ -26,7 +30,7 @@ struct AudioTestView: View {
         speechService: any SpeechRecognitionService = SpeechRecognitionServiceImpl(),
         ttsService: any TextToSpeechService = TextToSpeechServiceImpl(),
         nlpService: NLPAnalysisService = NLPAnalysisService(),
-        scoringService: SimpleScoringService = SimpleScoringService()
+        scoringService: any ScoringProtocol = SimpleScoringService()
     ) {
         self.audioService = audioService
         self.speechService = speechService
@@ -143,29 +147,35 @@ struct AudioTestView: View {
             
             if let metrics {
                 VStack(spacing: 12) {
+                    // Basic metrics
                     MetricRow(label: "Total Words", value: "\(metrics.totalWordCount)")
-                    MetricRow(label: "Filler Words", value: "\(metrics.fillerWordCount)")
+                    MetricRow(label: "Sentences", value: "\(metrics.sentenceCount)")
+                    MetricRow(label: "Avg Sentence Length", value: String(format: "%.1f words", metrics.avgSentenceLength))
                     MetricRow(label: "Speech Rate", value: String(format: "%.1f wpm", metrics.speechRate))
-                    
-                    if metrics.totalWordCount > 0 {
-                        let fillerPercentage = Double(metrics.fillerWordCount) / Double(metrics.totalWordCount) * 100
-                        MetricRow(label: "Filler %", value: String(format: "%.1f%%", fillerPercentage))
-                    }
                     
                     Divider()
                     
-                    HStack {
-                        Text("Semantic Similarity")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(String(format: "%.1f%%", metrics.semanticSimilarity * 100))
-                            .fontWeight(.medium)
-                            .foregroundStyle(similarityColor(for: metrics.semanticSimilarity))
-                    }
+                    // Quality metrics
+                    MetricRow(label: "Filler Words", value: "\(metrics.fillerWordCount)")
+                    MetricRow(label: "Filler Ratio", value: String(format: "%.1f%%", metrics.fillerRatio * 100))
+                    MetricRow(label: "Pause Count", value: "\(metrics.pauseCount)")
                     
-                    ProgressView(value: metrics.semanticSimilarity)
-                        .progressViewStyle(.linear)
-                        .tint(similarityColor(for: metrics.semanticSimilarity))
+                    Divider()
+                    
+                    // Advanced metrics with progress bars
+                    VStack(spacing: 8) {
+                        MetricProgressRow(
+                            label: "Keyword Coverage",
+                            value: metrics.keywordCoverage,
+                            color: coverageColor(for: metrics.keywordCoverage)
+                        )
+                        
+                        MetricProgressRow(
+                            label: "Semantic Similarity",
+                            value: metrics.semanticSimilarity,
+                            color: similarityColor(for: metrics.semanticSimilarity)
+                        )
+                    }
                 }
             } else {
                 Text("Record audio to see metrics...")
@@ -183,6 +193,12 @@ struct AudioTestView: View {
         return .red
     }
     
+    private func coverageColor(for coverage: Double) -> Color {
+        if coverage >= 0.6 { return .green }
+        if coverage >= 0.3 { return .orange }
+        return .red
+    }
+    
     // MARK: - Scores Section
     
     private var scoresSection: some View {
@@ -197,6 +213,15 @@ struct AudioTestView: View {
                     ScoreRow(label: "Confidence", score: scores.confidence)
                     ScoreRow(label: "Technical", score: scores.technical)
                     ScoreRow(label: "Pace", score: scores.pace)
+                }
+            } else if let scoringError {
+                VStack(spacing: 8) {
+                    Label("Scoring Error", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                    Text(scoringError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
             } else {
                 Text("Record audio to see scores...")
@@ -270,9 +295,9 @@ struct AudioTestView: View {
                 let audioStream = try await audioService.startRecording()
                 let transcriptStream = try await speechService.startRecognition(audioStream: audioStream)
                 
-                // Auto-stop after 5 seconds
+                // Auto-stop after 30 seconds
                 Task {
-                    try? await Task.sleep(for: .seconds(5))
+                    try? await Task.sleep(for: .seconds(30))
                     if !Task.isCancelled {
                         await MainActor.run {
                             stopRecording()
@@ -313,7 +338,15 @@ struct AudioTestView: View {
                 if !transcript.isEmpty {
                     let analyzedMetrics = nlpService.analyze(transcript: transcript, duration: duration)
                     metrics = analyzedMetrics
-                    scores = scoringService.calculateScores(metrics: analyzedMetrics)
+                    
+                    do {
+                        scores = try scoringService.calculateScores(metrics: analyzedMetrics, transcript: transcript)
+                        scoringError = nil
+                    } catch {
+                        logger.error("Scoring failed: \(error.localizedDescription)")
+                        scoringError = error.localizedDescription
+                        scores = nil
+                    }
                 }
                 
                 isRecording = false
@@ -351,6 +384,31 @@ private struct MetricRow: View {
             Spacer()
             Text(value)
                 .fontWeight(.medium)
+        }
+    }
+}
+
+// MARK: - Metric Progress Row
+
+private struct MetricProgressRow: View {
+    let label: String
+    let value: Double
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(String(format: "%.0f%%", value * 100))
+                    .fontWeight(.medium)
+                    .foregroundStyle(color)
+            }
+            
+            ProgressView(value: value)
+                .progressViewStyle(.linear)
+                .tint(color)
         }
     }
 }

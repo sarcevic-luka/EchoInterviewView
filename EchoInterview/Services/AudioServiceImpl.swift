@@ -1,9 +1,11 @@
 import AVFoundation
+import os.log
 
 actor AudioServiceImpl: AudioService {
     private let audioEngine = AVAudioEngine()
     private var isRecording = false
     private var bufferContinuation: AsyncStream<AVAudioPCMBuffer>.Continuation?
+    private static let logger = Logger(subsystem: "EchoInterview", category: "AudioService")
     
     func requestMicrophonePermission() async -> Bool {
         await withCheckedContinuation { continuation in
@@ -15,8 +17,9 @@ actor AudioServiceImpl: AudioService {
     
     func setupAudioSession() async throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, options: .defaultToSpeaker)
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true)
+        Self.logger.info("Audio session configured: \(session.sampleRate) Hz")
     }
     
     func startRecording() async throws -> AsyncStream<AVAudioPCMBuffer> {
@@ -29,10 +32,13 @@ actor AudioServiceImpl: AudioService {
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         
+        Self.logger.info("Audio format: \(format.sampleRate) Hz, \(format.channelCount) channels")
+        
         let (stream, continuation) = AsyncStream<AVAudioPCMBuffer>.makeStream()
         bufferContinuation = continuation
         
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        // Larger buffer for better speech recognition
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             Task {
                 await self.handleBuffer(buffer)
@@ -42,6 +48,7 @@ actor AudioServiceImpl: AudioService {
         audioEngine.prepare()
         try audioEngine.start()
         isRecording = true
+        Self.logger.info("Recording started")
         
         return stream
     }

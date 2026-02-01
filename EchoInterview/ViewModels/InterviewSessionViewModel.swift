@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 enum SessionState: Equatable {
     case idle
@@ -16,7 +17,7 @@ final class InterviewSessionViewModel {
     private let speechService: any SpeechRecognitionService
     private let ttsService: any TextToSpeechService
     private let nlpService: NLPAnalysisService
-    private let scoringService: SimpleScoringService
+    private let scoringService: any ScoringProtocol
     
     private(set) var currentState: SessionState = .idle
     private(set) var currentQuestionIndex: Int = 0
@@ -53,7 +54,7 @@ final class InterviewSessionViewModel {
         speechService: any SpeechRecognitionService = SpeechRecognitionServiceImpl(),
         ttsService: any TextToSpeechService = TextToSpeechServiceImpl(),
         nlpService: NLPAnalysisService = NLPAnalysisService(),
-        scoringService: SimpleScoringService = SimpleScoringService()
+        scoringService: any ScoringProtocol = SimpleScoringService()
     ) {
         self.audioService = audioService
         self.speechService = speechService
@@ -112,7 +113,17 @@ final class InterviewSessionViewModel {
             }
             
             let metrics = nlpService.analyze(transcript: transcript, duration: duration)
-            let scores = scoringService.calculateScores(metrics: metrics)
+            
+            let scores: AnswerScores
+            do {
+                scores = try scoringService.calculateScores(metrics: metrics, transcript: transcript)
+            } catch {
+                let logger = Logger(subsystem: "EchoInterview", category: "InterviewSession")
+                logger.error("Scoring failed: \(error.localizedDescription)")
+                errorMessage = "Failed to calculate scores: \(error.localizedDescription)"
+                currentState = .showingResults
+                return
+            }
             
             let answer = Answer(
                 transcript: transcript,
