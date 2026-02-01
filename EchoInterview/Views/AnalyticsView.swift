@@ -87,23 +87,29 @@ struct AnalyticsView: View {
             Label("Speech Metrics", systemImage: "waveform")
                 .font(.headline)
             
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 MetricCard(
                     icon: "textformat.123",
-                    title: "Total Words",
+                    title: "Words",
                     value: "\(viewModel.totalWordCount)"
                 )
                 
                 MetricCard(
                     icon: "exclamationmark.bubble",
-                    title: "Filler Words",
+                    title: "Fillers",
                     value: "\(viewModel.totalFillerWords)"
                 )
                 
                 MetricCard(
                     icon: "gauge.with.needle",
-                    title: "Avg WPM",
+                    title: "WPM",
                     value: String(format: "%.0f", viewModel.averageSpeechRate)
+                )
+                
+                MetricCard(
+                    icon: "brain.head.profile",
+                    title: "Relevance",
+                    value: String(format: "%.0f%%", viewModel.averageSemanticSimilarity * 100)
                 )
             }
         }

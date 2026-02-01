@@ -151,6 +151,21 @@ struct AudioTestView: View {
                         let fillerPercentage = Double(metrics.fillerWordCount) / Double(metrics.totalWordCount) * 100
                         MetricRow(label: "Filler %", value: String(format: "%.1f%%", fillerPercentage))
                     }
+                    
+                    Divider()
+                    
+                    HStack {
+                        Text("Semantic Similarity")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(String(format: "%.1f%%", metrics.semanticSimilarity * 100))
+                            .fontWeight(.medium)
+                            .foregroundStyle(similarityColor(for: metrics.semanticSimilarity))
+                    }
+                    
+                    ProgressView(value: metrics.semanticSimilarity)
+                        .progressViewStyle(.linear)
+                        .tint(similarityColor(for: metrics.semanticSimilarity))
                 }
             } else {
                 Text("Record audio to see metrics...")
@@ -160,6 +175,12 @@ struct AudioTestView: View {
         .padding()
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private func similarityColor(for similarity: Double) -> Color {
+        if similarity >= 0.7 { return .green }
+        if similarity >= 0.5 { return .orange }
+        return .red
     }
     
     // MARK: - Scores Section

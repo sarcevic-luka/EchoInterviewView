@@ -50,6 +50,11 @@ final class AnalyticsViewModel {
         return answers.reduce(0) { $0 + $1.metrics.speechRate } / Double(answers.count)
     }
     
+    var averageSemanticSimilarity: Double {
+        guard !answers.isEmpty else { return 0 }
+        return answers.reduce(0) { $0 + $1.metrics.semanticSimilarity } / Double(answers.count)
+    }
+    
     init(answers: [Answer], questions: [Question]) {
         self.answers = answers
         self.questions = questions
